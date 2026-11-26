@@ -28,3 +28,12 @@
 - 配置项目批准的 Release 签名后，重跑 Release APK 编译及 OPPO Android 16 真机验收。
 - 获取 `JXU-diagnostics-20261126-192809689.md` 后，复核实际跳转参数和失败日志。
 - 完成上述验收后再决定是否创建 PR；本日志提交本身不代表所有验收通过。
+
+## OPPO Android 16 真机调试验收（2026-11-26）
+
+- `flutter build apk --debug`：成功，生成 `build/app/outputs/flutter-apk/app-debug.apk`；APK SHA-256：`138F888CB88D773A3505DC75AD804C99FD579D1B9FA74FD4B451DC58A687385D`。
+- OPPO PLR110 / Android 16：ADB 已连接；以 `adb install -r` 安装 `edu.zjxu.jxucampushub.dev` 成功，保留原有应用数据。此结果仅代表 Debug 包，不替代 Release 安装验收。
+- 应用可启动并显示主页；进入教务系统后登录表单和验证码可见，点按刷新后验证码图像发生变化，确认验证码获取/刷新链路在该设备上可用。
+- 设备原有的记住账号状态随后自动触发了一次登录尝试并显示通用失败提示。测试期间没有手动输入凭据、读取密码或再次提交；随后强制停止调试应用，未清除数据。
+- 未完成真实账号认证、教务 SSO 到 `/jwglxt/` 的最终跳转、真实失败分类及 Cookie 阶段诊断验证。继续这些测试需要由用户在设备上自行完成一次登录；本次不将其标记为通过。
+- Release APK 和 Release 真机验收仍受前述签名配置缺失限制。
