@@ -58,7 +58,7 @@ class _JniDownloadGateway implements DownloadGateway {
         );
       },
       unavailable: false,
-      label: 'JNI 系统下载入队（${scrubSensitiveUrl(url)}）',
+      label: 'JNI 系统下载入队（${urlLocationForLog(url)}）',
       category: LogCategory.webview,
     );
   }
@@ -104,7 +104,7 @@ class SystemDownloader {
     } catch (error, stackTrace) {
       AppLogger.instance.webview(
         LogLevel.warn,
-        '系统下载入队失败: ${scrubSensitiveUrl(url)}',
+        '系统下载入队失败: ${urlLocationForLog(url)}',
         error: error,
         stackTrace: stackTrace,
       );

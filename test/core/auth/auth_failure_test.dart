@@ -71,6 +71,25 @@ void main() {
         AuthFailureClassifier.fromLoginHtml('<div>验证码已失效</div>'),
         AuthFailureKind.captchaRejected,
       );
+      expect(
+        AuthFailureClassifier.fromLoginHtml('<div id="tips">验证码输入错误</div>'),
+        AuthFailureKind.captchaRejected,
+      );
+    });
+
+    test('normal captcha form labels and input hints stay unknown', () {
+      expect(
+        AuthFailureClassifier.fromLoginHtml(
+          '<label>验证码</label><input placeholder="请输入验证码">',
+        ),
+        AuthFailureKind.unknown,
+      );
+      expect(
+        AuthFailureClassifier.fromLoginHtml(
+          '<script>验证码错误</script><input value="验证码错误">',
+        ),
+        AuthFailureKind.unknown,
+      );
     });
 
     test('recognizes explicit credential markers', () {

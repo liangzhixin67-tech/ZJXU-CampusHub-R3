@@ -38,6 +38,35 @@ class IsolatedAuthSession {
   final Dio _template;
   final HttpClientAdapter? _fallbackAdapter;
 
+  /// Opaque in-memory cookie state used only to compare stages in sanitized
+  /// diagnostics. Cookie names and values never leave this object.
+  Object cookieStateSnapshot() => _CookieStateSnapshot(_cookieState());
+
+  bool cookieStateChangedSince(Object snapshot) =>
+      snapshot is _CookieStateSnapshot && snapshot._state != _cookieState();
+
+  String _cookieState() {
+    final entries = <String>[];
+    for (final (scope, hosts) in <(String, Map<String, dynamic>)>[
+      ('host', _jar.hostCookies),
+      ('domain', _jar.domainCookies.cast<String, dynamic>()),
+    ]) {
+      for (final host in hosts.entries) {
+        final paths = host.value as Map<String, dynamic>;
+        for (final path in paths.entries) {
+          final cookies = path.value as Map<String, dynamic>;
+          for (final cookie in cookies.entries) {
+            entries.add(
+              '$scope|${host.key}|${path.key}|${cookie.key}|${cookie.value}',
+            );
+          }
+        }
+      }
+    }
+    entries.sort();
+    return entries.join('\n');
+  }
+
   /// 从 [sourceJar] 为 [seedUris] 快照 cookie，构造独立会话。
   ///
   /// [sourceJar] 使用应用的 [DefaultCookieJar] 或 [PersistCookieJar]。
@@ -141,6 +170,12 @@ class IsolatedAuthSession {
       ]);
     }
   }
+}
+
+class _CookieStateSnapshot {
+  const _CookieStateSnapshot(this._state);
+
+  final String _state;
 }
 
 class _TransactionCookieJar extends DefaultCookieJar {

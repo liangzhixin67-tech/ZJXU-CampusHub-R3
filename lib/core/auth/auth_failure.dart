@@ -71,10 +71,18 @@ class AuthFailureClassifier {
   /// 同时提到密码的兜底文案不会被归类为密码错误。
   static AuthFailureKind fromLoginHtml(String html) {
     if (html.isEmpty) return AuthFailureKind.unknown;
-    if (_captchaMarkers.any(html.contains)) {
+    final visibleText = html
+        .replaceAll(RegExp(r'<!--[\s\S]*?-->'), ' ')
+        .replaceAll(
+          RegExp(r'<(script|style)\b[^>]*>[\s\S]*?</\1>', caseSensitive: false),
+          ' ',
+        )
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    if (_captchaMarkers.any(visibleText.contains)) {
       return AuthFailureKind.captchaRejected;
     }
-    if (_invalidCredentialMarkers.any(html.contains)) {
+    if (_invalidCredentialMarkers.any(visibleText.contains)) {
       return AuthFailureKind.invalidCredentials;
     }
     return AuthFailureKind.unknown;
@@ -85,7 +93,7 @@ class AuthFailureClassifier {
     '验证码已失效',
     '验证码不正确',
     '验证码失效',
-    '请输入验证码',
+    '验证码输入错误',
   ];
 
   static const List<String> _invalidCredentialMarkers = <String>[

@@ -93,6 +93,40 @@ String scrubSensitiveUrl(String rawUrl) {
   return sanitizedUri.toString();
 }
 
+/// Upgrades only the legacy HTTP academic-system host to its HTTPS equivalent.
+/// Query and fragment are retained because the academic portal uses them for
+/// legitimate deep links. The value is for navigation only and must not be
+/// written to logs.
+Uri? upgradeTrustedAcademicHttpUri(Uri uri) {
+  if (uri.scheme.toLowerCase() != 'http' ||
+      uri.host.toLowerCase() != 'jwzx.zjxu.edu.cn' ||
+      uri.userInfo.isNotEmpty ||
+      (uri.hasPort && uri.port != 80) ||
+      !(uri.path == '/jwglxt' || uri.path.startsWith('/jwglxt/'))) {
+    return null;
+  }
+  return Uri(
+    scheme: 'https',
+    host: uri.host,
+    path: uri.path,
+    query: uri.hasQuery ? uri.query : null,
+    fragment: uri.hasFragment ? uri.fragment : null,
+  );
+}
+
+/// Stable location suitable for diagnostics; intentionally omits userinfo,
+/// query parameters and fragments because those may contain authentication data.
+String urlLocationForLog(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl.trim());
+  if (uri == null) return '[invalid-url]';
+  return Uri(
+    scheme: uri.scheme,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+    path: uri.path,
+  ).toString();
+}
+
 /// 判定是否处于统一认证/教务认证的敏感中间过渡状态。
 ///
 /// 避免将带有一次性 CAS Service Ticket、OAuth access_token 等敏感参数的过渡链接

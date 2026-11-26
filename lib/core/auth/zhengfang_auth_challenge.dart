@@ -269,6 +269,7 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
     CancelToken? cancelToken,
   }) async {
     final loginPageUrl = _loginPageUrlFor(mode);
+    final cookiesBeforePage = session.cookieStateSnapshot();
     final pageResp = await session.send<String>(
       label: '教务登录页上下文',
       cancelToken: cancelToken,
@@ -284,6 +285,16 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
 
     final statusCode = pageResp.statusCode ?? 0;
     final location = pageResp.headers.value('location') ?? '';
+    final pageHtml = pageResp.data ?? '';
+    final csrfToken = extractCsrfFromHtml(pageHtml);
+    AppLogger.instance.auth(
+      LogLevel.info,
+      'academic_login_diag stage=login_page status=$statusCode '
+      'form_recognized=${_hasZhengfangLoginForm(pageHtml)} '
+      'error_prompt_present=${_hasExplicitLoginError(pageHtml)} '
+      'csrf_present=${csrfToken.isNotEmpty} '
+      'cookie_changed=${session.cookieStateChangedSince(cookiesBeforePage)}',
+    );
     if (isZhengfangGatewayLoginUrl(location)) {
       AppLogger.instance.auth(LogLevel.warn, '检测到 WebVPN 登录页重定向，当前认证已过期');
       // 网关掉线不能撤销独立的教务身份；交给路由准备与 CAS 恢复处理。
@@ -308,9 +319,6 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       );
     }
 
-    final pageHtml = pageResp.data ?? '';
-    final csrfToken = extractCsrfFromHtml(pageHtml);
-
     if (csrfToken.isEmpty) {
       AppLogger.instance.auth(LogLevel.warn, 'CSRF Token 为空，可能连接异常');
     }
@@ -332,6 +340,7 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
     CancelToken? cancelToken,
   }) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
+    final cookiesBeforeCaptcha = session.cookieStateSnapshot();
     final resp = await session.send<List<int>>(
       label: '教务验证码',
       cancelToken: cancelToken,
@@ -344,6 +353,11 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
           headers: {'Referer': _loginPageUrlFor(mode)},
         ),
       ),
+    );
+    AppLogger.instance.auth(
+      LogLevel.info,
+      'academic_login_diag stage=captcha '
+      'cookie_changed=${session.cookieStateChangedSince(cookiesBeforeCaptcha)}',
     );
 
     final location = resp.headers.value('location') ?? '';
@@ -416,6 +430,7 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       }
 
       final ts = context.timestampMs;
+      final cookiesBeforePublicKey = context.session.cookieStateSnapshot();
       final keyResp = await context.session.send<Map<String, dynamic>>(
         label: '教务登录公钥',
         cancelToken: cancelToken,
@@ -430,6 +445,11 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
             },
           ),
         ),
+      );
+      AppLogger.instance.auth(
+        LogLevel.info,
+        'academic_login_diag stage=public_key '
+        'cookie_changed=${context.session.cookieStateChangedSince(cookiesBeforePublicKey)}',
       );
       cancelToken.throwIfCancelled();
       if (isStale()) {
@@ -450,6 +470,7 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       }
 
       final encryptedPwd = _encryptPassword(password, modulus, exponent);
+      final cookiesBeforeSubmit = context.session.cookieStateSnapshot();
       final loginResp = await context.session.send<String>(
         label: '教务登录',
         cancelToken: cancelToken,
@@ -475,6 +496,11 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
             },
           ),
         ),
+      );
+      AppLogger.instance.auth(
+        LogLevel.info,
+        'academic_login_diag stage=login_submit '
+        'cookie_changed=${context.session.cookieStateChangedSince(cookiesBeforeSubmit)}',
       );
 
       cancelToken.throwIfCancelled();
@@ -568,7 +594,13 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       final msg = extractLoginFailureMessage(html);
       final kind = AuthFailureClassifier.classify(html: html);
 
-      AppLogger.instance.auth(LogLevel.warn, '教务系统登录失败: $msg');
+      AppLogger.instance.auth(
+        LogLevel.warn,
+        'academic_login_diag stage=login_result '
+        'form_recognized=${_hasZhengfangLoginForm(html)} '
+        'error_prompt_present=${_hasExplicitLoginError(html)} '
+        'csrf_present=${context.csrfToken.isNotEmpty} failure_category=$kind',
+      );
       return LoginFailure(msg, kind: kind);
     } on DioException catch (e) {
       if (isStale()) {
@@ -581,7 +613,8 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       }
       AppLogger.instance.auth(
         LogLevel.error,
-        '教务系统登录网络异常: ${e.type} ${e.message}',
+        'academic_login_diag stage=exception failure_category='
+        '${AuthFailureClassifier.fromTransport(e)} transport=${e.type}',
       );
       return LoginFailure(
         '网络错误：${e.message}',
@@ -591,6 +624,17 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
       return LoginFailure('登录异常：$e');
     }
   }
+
+  bool _hasZhengfangLoginForm(String html) {
+    bool containsField(String field) => RegExp(
+      "(?:name|id)\\s*=\\s*[\"']$field[\"']",
+      caseSensitive: false,
+    ).hasMatch(html);
+    return containsField('yhm') && containsField('mm') && containsField('yzm');
+  }
+
+  bool _hasExplicitLoginError(String html) =>
+      AuthFailureClassifier.fromLoginHtml(html) != AuthFailureKind.unknown;
 
   /// 登录 POST 判成功后、提交前的会话校验：用本事务的**隔离会话**请求受信
   /// 菜单入口，判定逻辑复用 [classifyAcademicEntryResponse]（与受信入口探测
@@ -604,6 +648,7 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
     const caller = 'post_login_verify';
     final requestUrl = '${context.baseUrl}/xtgl/index_initMenu.html';
     try {
+      final cookiesBeforeVerify = context.session.cookieStateSnapshot();
       final response = await context.session.send<String>(
         label: '教务登录后会话校验',
         cancelToken: cancelToken,
@@ -618,6 +663,11 @@ extension ZhengfangAuthChallengeExtension on ZhengfangAuth {
             headers: {'Referer': context.loginPageUrl},
           ),
         ),
+      );
+      AppLogger.instance.auth(
+        LogLevel.info,
+        'academic_login_diag stage=session_verify '
+        'cookie_changed=${context.session.cookieStateChangedSince(cookiesBeforeVerify)}',
       );
       final status = response.statusCode ?? 0;
       final location = response.headers.value('location') ?? '';

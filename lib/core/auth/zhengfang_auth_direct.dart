@@ -431,8 +431,6 @@ extension ZhengfangAuthDirectExtension on ZhengfangAuth {
       if (message.isNotEmpty) return message;
     }
 
-    if (html.contains('验证码')) return '验证码错误或已过期，请刷新后重试';
-    if (html.contains('用户名') || html.contains('密码')) return '用户名或密码错误';
     return '登录失败，请检查用户名、密码和验证码';
   }
 

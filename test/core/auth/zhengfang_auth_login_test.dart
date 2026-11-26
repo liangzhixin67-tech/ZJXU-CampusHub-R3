@@ -97,9 +97,9 @@ void main() {
       expect(auth.extractLoginFailureMessage(html), '用户名或密码错误');
     });
 
-    test('returns captcha fallback when html mentions 验证码', () {
-      const html = '<html><body>验证码输入错误</body></html>';
-      expect(auth.extractLoginFailureMessage(html), '验证码错误或已过期，请刷新后重试');
+    test('does not infer captcha rejection from ordinary form prompts', () {
+      const html = '<html><body><input placeholder="请输入验证码"></body></html>';
+      expect(auth.extractLoginFailureMessage(html), '登录失败，请检查用户名、密码和验证码');
     });
 
     test('prefers tips content over generic captcha fallback', () {
@@ -107,7 +107,7 @@ void main() {
       expect(auth.extractLoginFailureMessage(html), '验证码已失效，请刷新');
     });
 
-    test('strips nested html tags inside tips element', () {
+    test('keeps an ordinary prompt in tips as a prompt, not a rejection', () {
       const html = '<span id="tips"><font color="red">请输入验证码</font></span>';
       expect(auth.extractLoginFailureMessage(html), '请输入验证码');
     });
